@@ -1,8 +1,11 @@
 PREFIX:=/usr
 DESTDIR:=
 PLATFORM:=linux
+PKG_CONFIG:=$(shell which pkg-config 2>/dev/null)
 LUCI_DIR:=$(DESTDIR)$(PREFIX)/lib/lua/luci
-UNIT_DIR:=$(DESTDIR)$(PREFIX)/lib/systemd/system
+UNIT_DIR:=$(if $(PKG_CONFIG),\
+	$(DESTDIR)$(shell $(PKG_CONFIG) --variable systemdsystemunitdir systemd),\
+	$(DESTDIR)$(PREFIX)/lib/systemd/system)
 
 all:
 	@echo "Run 'make install' to install."
@@ -23,11 +26,10 @@ install-openwrt: install-lib
 install-linux: install-lib
 	install -m 0755 -d $(UNIT_DIR) $(DESTDIR)$(PREFIX)/lib/tmpfiles.d \
 		$(DESTDIR)$(PREFIX)/bin
-	install -m 0644  platform/linux/default.conf $(DESTDIR)/etc/sqm
+	install -m 0644 -C -b platform/linux/default.conf $(DESTDIR)/etc/sqm
 	install -m 0644  platform/linux/sqm@.service $(UNIT_DIR)
 	install -m 0644  platform/linux/sqm-tmpfiles.conf \
 		$(DESTDIR)$(PREFIX)/lib/tmpfiles.d/sqm.conf
-	install -m 0700 -d $(DESTDIR)/run/sqm
 	install -m 0755 platform/linux/sqm-bin $(DESTDIR)$(PREFIX)/bin/sqm
 	test -d $(DESTDIR)/etc/network/if-up.d && install -m 0755 platform/linux/sqm-ifup \
 		$(DESTDIR)/etc/network/if-up.d/sqm || exit 0
@@ -36,7 +38,7 @@ install-linux: install-lib
 
 install-lib:
 	install -m 0755 -d $(DESTDIR)/etc/sqm $(DESTDIR)$(PREFIX)/lib/sqm
-	install -m 0644 platform/$(PLATFORM)/sqm.conf $(DESTDIR)/etc/sqm/sqm.conf
+	install -m 0644 -C -b platform/$(PLATFORM)/sqm.conf $(DESTDIR)/etc/sqm/sqm.conf
 	install -m 0644  src/functions.sh src/defaults.sh \
 		src/*.qos src/*.help $(DESTDIR)$(PREFIX)/lib/sqm
 	install -m 0744  src/start-sqm src/stop-sqm src/update-available-qdiscs \
