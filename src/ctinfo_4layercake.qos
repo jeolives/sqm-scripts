@@ -1,5 +1,3 @@
-#!/bin/sh
-#
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License version 2 as published by the
 # Free Software Foundation.
@@ -30,7 +28,10 @@
 # connection mark into the packet and CAKE can be told to look at this restored
 # mark for tin selection.  Events turned out that the initial plans I had for
 # 'fwmark' got neutered and whilst fwmark exists and works, I've chosen not to
-# use it for this solution.
+# use it for this solution. (The initial plan was to get CAKE to store the
+# chosen tin in the fwmark itself, but qdiscs updating conntrack is regarded
+# as a layering violation so is a no no, it worked well but upstream didn't
+# like it)
 #
 # What I really wanted to do was store the DSCP value for a connection into the
 # firewall and use that stored DSCP as the key.  Storing on egress and
@@ -54,8 +55,8 @@
 #
 # We usurp top byte of the firewall connmark for our own purposes.
 # bits 3-8 = DSCP
-# bit  2   = DSCPS flag - DSCP is stored in bits 3-8 but may be changed
-# bit  1   = DSCPF flag - DSCP is long-term fixed
+# bit  2   = DSCPS flag - DSCP is stored in bits 3-8 but may be changed (0x02)
+# bit  1   = DSCPF flag - DSCP is long-term fixed (0x01)
 #
 # egress packets are hooked by an iptables rule if DSCPS & DSCPF unset and are
 # passed to a 'hard' hosts/port ruleset chain.  This chain sets any applicable
@@ -66,11 +67,20 @@
 # dynamic ruleset chain changes connections that are currently Best Effort to
 # BULK and sets DSCPF
 #
-# ctinfo instances are set on both ingress and egress paths.  The ingress patch
+# ctinfo instances are set on both ingress and egress paths.  The ingress path
 # is hopefully obvious but ctinfo on egress may not be quite so obvious to
 # understand.  It is there to copy the previously set DSCP value to all
 # corresponding egress packets and thus eliminate the requirement for each
 # packet to pass through the 'hard' ruleset.
+#
+# More rubbish/info.  jump -j vs goto -g in iptables rules
+# jump is a bit like a subroutine, in other words unless the 'jumped' to
+# table drops or accepts a packet, the return from that sub-table comes
+# back to the calling table just after the point where we jumped(called)
+# the sub-table.
+# goto goes to the called table, and when it returns it returns to the table
+# that called us.
+# I make use of both.
 
 . /lib/functions/network.sh
 . ${SQM_LIB_DIR}/defaults.sh
@@ -132,12 +142,11 @@ ipt_setup() {
     ipt -t mangle -N QOS_MARK_D_orig_${IFACE}
     ipt -t mangle -N QOS_MARK_D_repl_${IFACE}
 
-
 # Dynamic rules - These get run when a connection first goes above our bulk transfer size limit
 # if stored DSCP is CS0 (Best effort) then set it to CS1 (bulk) - this is the dynamic de-prioritisation.
-ipt -t mangle -A QOS_MARK_D_${IFACE} -m connmark --mark 0x00000000/0xfc000000 -j CONNMARK --set-xmark 0x20000000/0x20000000
-# by now whatever we have we stick, so set DSCPFixed bit
-ipt -t mangle -A QOS_MARK_D_${IFACE} -j CONNMARK --set-xmark 0x01000000/0x01000000
+# ipt -t mangle -A QOS_MARK_D_${IFACE} -m connmark --mark 0x00000000/0xfc000000 -j CONNMARK --set-xmark 0x20000000/0x20000000
+# and by now whatever we have we stick with, so set DSCPFixed bit
+ipt -t mangle -A QOS_MARK_D_${IFACE} -j CONNMARK --set-xmark 0x21000000/0x21000000
 # ---- End of Dynamic Rules
 
 # Send marked connections over CONNB bytes and not DSCPFixed to the dynamic rules
