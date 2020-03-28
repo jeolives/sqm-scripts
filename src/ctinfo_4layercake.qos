@@ -144,9 +144,9 @@ ipt_setup() {
 
 # Dynamic rules - These get run when a connection first goes above our bulk transfer size limit
 # if stored DSCP is CS0 (Best effort) then set it to CS1 (bulk) - this is the dynamic de-prioritisation.
-# ipt -t mangle -A QOS_MARK_D_${IFACE} -m connmark --mark 0x00000000/0xfc000000 -j CONNMARK --set-xmark 0x20000000/0x20000000
+ipt -t mangle -A QOS_MARK_D_${IFACE} -m connmark --mark 0x00000000/0xfc000000 -j CONNMARK --set-xmark 0x20000000/0x20000000
 # and by now whatever we have we stick with, so set DSCPFixed bit
-ipt -t mangle -A QOS_MARK_D_${IFACE} -j CONNMARK --set-xmark 0x21000000/0x21000000
+ipt -t mangle -A QOS_MARK_D_${IFACE} -j CONNMARK --set-xmark 0x01000000/0x01000000
 # ---- End of Dynamic Rules
 
 # Send marked connections over CONNB bytes and not DSCPFixed to the dynamic rules
